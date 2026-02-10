@@ -1,63 +1,62 @@
 import os
 import asyncio
-import time
 import logging
-import sqlite3
-from threading import Thread
 from flask import Flask
+from threading import Thread
 from pyrogram import Client, filters
 
-# --- LOGGING ---
+# --- 1. LOGGING SETUP ---
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# --- WEB SERVER (For Render) ---
+# --- 2. WEB SERVER FOR RENDER ---
 app = Flask('')
 @app.route('/')
-def home(): return "Creatorviews Bot is Live! 🚀"
+def home(): return "1winviews is Live! 🚀"
 
 def run_web():
     port = int(os.environ.get("PORT", 8080))
     app.run(host='0.0.0.0', port=port)
 
-# --- CONFIGURATION (With Error Fix) ---
-def get_env(name, is_int=False):
-    val = os.environ.get(name)
-    if not val:
-        logger.error(f"❌ Environment Variable '{name}' missing hai! Render settings check karein.")
-        return None
-    return int(val) if is_int else val
+# --- 3. CONFIGURATION ---
+API_ID = int(os.environ.get("API_ID"))
+API_HASH = os.environ.get("API_HASH")
+BOT_TOKEN = os.environ.get("BOT_TOKEN")
+SESSION_STRING = os.environ.get("SESSION_STRING")
+ADMIN_ID = int(os.environ.get("ADMIN_ID"))
+SUB_LINK_CODE = "fz8rfeqN8zor"
 
-API_ID = get_env("API_ID", True)
-API_HASH = get_env("API_HASH")
-BOT_TOKEN = get_env("BOT_TOKEN")
-SESSION_STRING = get_env("SESSION_STRING")
-ADMIN_ID = get_env("ADMIN_ID", True)
-SUB_LINK_CODE = "fz8rfeqN8zor" # Aapka subordinate code
+# --- 4. CLIENTS ---
+# Bot Client (For Creators)
+bot = Client("creator_bot", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
+# Userbot Client (For LabViews Sync)
+userbot = Client("user_relay", api_id=API_ID, api_hash=API_HASH, session_string=SESSION_STRING)
 
-if None in [API_ID, API_HASH, BOT_TOKEN, SESSION_STRING, ADMIN_ID]:
-    logger.error("❌ Kuch variables missing hain. Bot exit ho raha hai.")
-    exit(1)
+# --- 5. BOT HANDLERS ---
+@bot.on_message(filters.command("start") & filters.private)
+async def start_handler(client, message):
+    logger.info(f"📩 Message received from: {message.from_user.id}")
+    if message.from_user.id == ADMIN_ID:
+        await message.reply("Bhai, Main Zinda Hoon! 🚀\nAapka account officially link ho gaya hai.")
+    else:
+        await message.reply(f"⚠️ Aap approved nahi hain. Aapki ID: `{message.from_user.id}`")
 
-# --- CLIENTS ---
-bot = Client("bridge_bot", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
-userbot = Client("user_bridge", api_id=API_ID, api_hash=API_HASH, session_string=SESSION_STRING)
+# --- 6. MAIN RUNNER ---
+async def main():
+    # Web server start karein taaki Render kill na kare
+    Thread(target=run_web).start()
+    
+    logger.info("🚀 Starting Bots...")
+    await bot.start()
+    await userbot.start()
+    
+    # LabViews Subordinate Sync
+    logger.info("🔗 Linking Userbot to LabViews...")
+    await userbot.send_message("LabViews_bot", f"/start {SUB_LINK_CODE}")
+    
+    logger.info("✅ SUCCESS: Both bots are running!")
+    await asyncio.Event().wait()
 
-# --- SUBORDINATE ACTIVATION ---
-async def activate_subordinate():
-    async with userbot:
-        logger.info("🔗 Subordinate link activate kar raha hoon...")
-        await userbot.send_message("LabViews_bot", f"/start {SUB_LINK_CODE}")
-        logger.info("✅ Subordinate status linked!")
-
-# --- START LOGIC ---
 if __name__ == "__main__":
-    # Web server start for Render
-    Thread(target=run_web, daemon=True).start()
-    
-    # Run Subordinate activation once
     loop = asyncio.get_event_loop()
-    loop.run_until_complete(activate_subordinate())
-    
-    logger.info("🚀 @Creatorviews_bot is starting...")
-    bot.run()
+    loop.run_until_complete(main())
